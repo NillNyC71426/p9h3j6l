@@ -33,6 +33,20 @@ body{font-family:var(--font);height:100vh;height:100dvh;background:var(--bg);col
 .hdr{padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--bg3);display:flex;align-items:center;gap:8px;flex-shrink:0}
 .hdr h1{font-size:14px;white-space:nowrap}
 .hdr .cfg-btn{background:none;border:1px solid var(--bg4);color:var(--fg2);padding:4px 10px;border-radius:5px;font-size:12px;cursor:pointer}
+.chat-mgr-modal{display:none;position:fixed;inset:0;z-index:100;background:#000a;justify-content:center;align-items:center}
+.chat-mgr-modal.show{display:flex}
+.chat-mgr-box{background:var(--bg2);border:1px solid var(--bg3);border-radius:12px;width:90%;max-width:440px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
+.chat-mgr-hdr{display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid var(--bg3)}
+.chat-mgr-hdr h3{font-size:14px;flex:1}
+.chat-mgr-hdr button{background:none;border:none;color:var(--fg2);font-size:16px;cursor:pointer}
+.chat-list{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;-webkit-overflow-scrolling:touch}
+.chat-item{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg3);border-radius:8px;border:1px solid transparent;cursor:pointer;transition:all .15s}
+.chat-item.active{border-color:var(--blue);background:#89b4fa15}
+.chat-item-info{flex:1;min-width:0}
+.chat-item-title{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--fg)}
+.chat-item-sub{font-size:11px;color:var(--fg2);margin-top:2px}
+.chat-item-del{background:none;border:none;color:var(--red);padding:4px 6px;cursor:pointer;font-size:13px;border-radius:4px;flex-shrink:0}
+.chat-item-del:hover{background:#f38ba822}
 .cfg-modal{display:none;position:fixed;inset:0;z-index:100;background:#000a;justify-content:center;align-items:center}
 .cfg-modal.show{display:flex}
 .cfg-box{background:var(--bg2);border:1px solid var(--bg3);border-radius:12px;padding:20px;width:90%;max-width:420px}
@@ -106,7 +120,21 @@ body{font-family:var(--font);height:100vh;height:100dvh;background:var(--bg);col
 
 <div class="hdr">
   <h1>🤖 AI编程</h1>
-  <button class="cfg-btn" onclick="newChat()" style="color:var(--green);border-color:var(--green)">＋ 新对话</button><button class="cfg-btn" onclick="$('cfgModal').classList.add('show')">⚙ 设置</button>
+  <button class="cfg-btn" id="kaBtn" onclick="toggleKeepAlive()" title="播放无声音频防止手机后台清理">🛡️ 保活: 关</button>
+  <button class="cfg-btn" onclick="openChatMgr()">💬 记录</button>
+  <button class="cfg-btn" onclick="newChat()" style="color:var(--green);border-color:var(--green)">＋ 新对话</button>
+  <button class="cfg-btn" onclick="$('cfgModal').classList.add('show')">⚙ 设置</button>
+</div>
+
+<!-- 对话记录管理弹窗 -->
+<div class="chat-mgr-modal" id="chatMgrModal" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="chat-mgr-box">
+    <div class="chat-mgr-hdr">
+      <h3>💬 对话历史记录</h3>
+      <button onclick="$('chatMgrModal').classList.remove('show')">✕</button>
+    </div>
+    <div class="chat-list" id="chatList"></div>
+  </div>
 </div>
 
 
@@ -201,21 +229,247 @@ function openDB(){
 function dbPut(key,val){return new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(val,key);tx.oncomplete=()=>res();tx.onerror=e=>rej(e)})}
 function dbGet(key){return new Promise((res,rej)=>{const tx=db.transaction('kv','readonly');const r=tx.objectStore('kv').get(key);r.onsuccess=()=>res(r.result);r.onerror=e=>rej(e)})}
 
+// ===== 后台保活（静音音频） =====
+let keepAliveActive = false, bgAudio = null;
+
+function getSilentAudioUrl(){
+  const sampleRate = 8000, duration = 2, numSamples = sampleRate * duration;
+  const buffer = new ArrayBuffer(44 + numSamples);
+  const view = new DataView(buffer);
+  const writeStr = (o, s) => { for(let i=0; i<s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+  writeStr(0, 'RIFF'); view.setUint32(4, 36 + numSamples, true);
+  writeStr(8, 'WAVE'); writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate, true); view.setUint16(32, 1, true);
+  view.setUint16(34, 8, true); writeStr(36, 'data');
+  view.setUint32(40, numSamples, true);
+  for (let i = 0; i < numSamples; i++) view.setUint8(44 + i, 128); // 8-bit PCM 静音
+  return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
+}
+
+function updateKaBtn(){
+  const btn = $('kaBtn');
+  if(!btn) return;
+  if(keepAliveActive){
+    btn.textContent = '🛡️ 保活中';
+    btn.style.color = 'var(--green)';
+    btn.style.borderColor = 'var(--green)';
+  } else {
+    btn.textContent = '🛡️ 保活: 关';
+    btn.style.color = 'var(--fg2)';
+    btn.style.borderColor = 'var(--bg4)';
+  }
+}
+
+async function startKeepAlive(){
+  try {
+    if(!bgAudio){
+      bgAudio = new Audio();
+      bgAudio.src = getSilentAudioUrl();
+      bgAudio.loop = true;
+      bgAudio.setAttribute('playsinline', '');
+      bgAudio.setAttribute('webkit-playsinline', '');
+    }
+    await bgAudio.play();
+    keepAliveActive = true;
+    if('mediaSession' in navigator){
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: 'AI手机编程 - 后台保活运行中',
+        artist: '系统常驻',
+        album: '后台服务'
+      });
+    }
+    updateKaBtn();
+    await dbPut('keepAlive', true);
+  } catch(e) {
+    console.warn('保活音频播放受限，需用户主动触发:', e);
+  }
+}
+
+function stopKeepAlive(){
+  if(bgAudio){
+    bgAudio.pause();
+    bgAudio.currentTime = 0;
+  }
+  keepAliveActive = false;
+  updateKaBtn();
+  dbPut('keepAlive', false);
+}
+
+function toggleKeepAlive(){
+  if(keepAliveActive) stopKeepAlive();
+  else startKeepAlive();
+}
+
+// 监听屏幕/可见性切换，确保后台切回或息屏时音频不中断
+document.addEventListener('visibilitychange', ()=>{
+  if(keepAliveActive && bgAudio && bgAudio.paused){
+    bgAudio.play().catch(()=>{});
+  }
+});
+
+let isLoaded = false;
+let savedConfig = { model: '', key: '', base: '' };
+
+// ===== 对话多会话管理 =====
+let chatSessions = []; // { id, title, time, messages: [] }
+let currentSessionId = null;
+
+function getCurrentSession(){
+  return chatSessions.find(s => s.id === currentSessionId);
+}
+
+function syncCurrentSessionMessages(){
+  let s = getCurrentSession();
+  if(!s){
+    s = {
+      id: 'chat_' + Date.now(),
+      title: '新对话',
+      time: Date.now(),
+      messages: hist
+    };
+    chatSessions.unshift(s);
+    currentSessionId = s.id;
+  } else {
+    s.messages = hist;
+    s.time = Date.now();
+  }
+}
+
+function openChatMgr(){
+  renderChatList();
+  $('chatMgrModal').classList.add('show');
+}
+
+function renderChatList(){
+  const wrap = $('chatList');
+  if(!chatSessions.length){
+    wrap.innerHTML = '<div style="color:var(--fg2);text-align:center;padding:30px 0;font-size:12px;">暂无历史记录</div>';
+    return;
+  }
+  wrap.innerHTML = chatSessions.map(s => {
+    const isActive = s.id === currentSessionId;
+    const dateStr = new Date(s.time).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const count = s.messages ? s.messages.length : 0;
+    const safeTitle = (s.title || '新对话').replace(/"/g, '&quot;');
+    return `<div class="chat-item ${isActive ? 'active' : ''}" onclick="switchChatSession('${s.id}')">
+      <div class="chat-item-info">
+        <div class="chat-item-title">${safeTitle}</div>
+        <div class="chat-item-sub">${dateStr} · ${count} 条消息</div>
+      </div>
+      <button class="chat-item-del" title="删除对话" onclick="event.stopPropagation();delChatSession('${s.id}')">🗑️</button>
+    </div>`;
+  }).join('');
+}
+
+function switchChatSession(id){
+  if(id === currentSessionId){
+    $('chatMgrModal').classList.remove('show');
+    return;
+  }
+  syncCurrentSessionMessages();
+  const target = chatSessions.find(s => s.id === id);
+  if(!target) return;
+  currentSessionId = target.id;
+  hist = target.messages || [];
+  renderMsgs();
+  $('chatMgrModal').classList.remove('show');
+  autoSave();
+}
+
+function delChatSession(id){
+  if(!confirm('确定删除此对话记录吗？')) return;
+  const idx = chatSessions.findIndex(s => s.id === id);
+  if(idx === -1) return;
+  chatSessions.splice(idx, 1);
+  if(currentSessionId === id){
+    if(chatSessions.length > 0){
+      currentSessionId = chatSessions[0].id;
+      hist = chatSessions[0].messages || [];
+    } else {
+      currentSessionId = 'chat_' + Date.now();
+      hist = [];
+      chatSessions.push({ id: currentSessionId, title: '新对话', time: Date.now(), messages: [] });
+    }
+    renderMsgs();
+  }
+  renderChatList();
+  autoSave();
+}
+
+function renderMsgs(){
+  $('msgs').innerHTML = '';
+  hist.forEach(h => {
+    if(h.role === 'user') addMsg('user', h.content);
+    else if(h.role === 'assistant') addMsg('ai', h.content);
+  });
+}
+
 async function saveAll(){
+  if(!isLoaded) return; // 尚未加载完成，禁止回写覆盖
   if(cur)F[cur]=$('ed').value;
+  syncCurrentSessionMessages();
   await dbPut('files',JSON.parse(JSON.stringify(F)));
   await dbPut('currentFile',cur);
-  await dbPut('config',{model:$('model').value,key:$('key').value,base:$('base').value});await dbPut('chatHistory',hist);
+  // 如果输入框有值才更新 savedConfig，防止空覆盖已有配置
+  if($('key').value || $('base').value || $('model').value){
+    savedConfig = {
+      model: $('model').value.trim(),
+      key: $('key').value.trim(),
+      base: $('base').value.trim()
+    };
+  }
+  await dbPut('config', savedConfig);
+  await dbPut('chatSessions', chatSessions);
+  await dbPut('currentSessionId', currentSessionId);
+  await dbPut('chatHistory', hist);
+  await dbPut('keepAlive', keepAliveActive);
 }
 async function loadAll(){
   const files=await dbGet('files');
   const cf=await dbGet('currentFile');
   const cfg=await dbGet('config');
   const ch=await dbGet('chatHistory');
+  const ka=await dbGet('keepAlive');
+  const sessions = await dbGet('chatSessions');
+  const curSid = await dbGet('currentSessionId');
+
   if(files){Object.keys(F).forEach(k=>{if(!files[k])delete F[k]});Object.assign(F,files)}
   if(cf&&F[cf])cur=cf;
-  if(cfg){$('model').value=cfg.model||'';$('key').value=cfg.key||'';$('base').value=cfg.base||''}
-  if(ch)hist=ch;
+  if(cfg){
+    savedConfig = cfg;
+    $('model').value=cfg.model||'';
+    $('key').value=cfg.key||'';
+    $('base').value=cfg.base||'';
+  }
+
+  // 恢复多会话或向下兼容
+  if(sessions && sessions.length > 0){
+    chatSessions = sessions;
+    currentSessionId = curSid || chatSessions[0].id;
+    const curS = getCurrentSession();
+    hist = curS ? (curS.messages || []) : [];
+  } else {
+    currentSessionId = 'chat_' + Date.now();
+    hist = ch || [];
+    chatSessions = [{
+      id: currentSessionId,
+      title: hist.length ? '历史会话' : '新对话',
+      time: Date.now(),
+      messages: hist
+    }];
+  }
+  if(ka){
+    // 恢复保活状态：绑定一次手势交互以允许自动播放
+    const restore = () => {
+      startKeepAlive();
+      document.removeEventListener('click', restore);
+      document.removeEventListener('touchstart', restore);
+    };
+    document.addEventListener('click', restore, { once: true });
+    document.addEventListener('touchstart', restore, { once: true });
+  }
 }
 // 自动保存
 let saveTimer;
@@ -244,7 +498,15 @@ async function testAPI(){
   }catch(e){tr.className='test-result fail';tr.textContent=`❌ 连接失败: ${e.message}`}
 }
 
-function saveCfg(){$('cfgModal').classList.remove('show');autoSave()}
+async function saveCfg(){
+  savedConfig = {
+    model: $('model').value.trim(),
+    key: $('key').value.trim(),
+    base: $('base').value.trim()
+  };
+  await dbPut('config', savedConfig);
+  $('cfgModal').classList.remove('show');
+}
 
 // ===== 面板切换 =====
 const panels=[$('panelChat'),$('panelEdit'),$('panelPreview')];
@@ -545,13 +807,21 @@ const SYS = `你是专业的前端编程助手，请严格按照 SEARCH/REPLACE 
 2.  **最小上下文**: 只包含必要的上下文，让 \`SEARCH\` 块尽可能短，但要保证其在文件中的唯一性。
 3.  **多点修改**: 如果需要修改多个地方，请使用多个 \`SEARCH/REPLACE\` 块。
 4.  **完整代码块**: 当创建新文件或AI认为覆盖整个文件更安全时，可以直接提供完整的代码块，并用 \\\`\\\`\\\` 包裹。
+5.  替换后的新代码部分不能为空。
 
 # 故障排查
 如果遇到控制台错误，请仔细分析错误信息，并生成修复补丁。如果补丁格式不正确或无法匹配，我将无法应用它。`;
 
 function newChat(){
-  if(hist.length && !confirm('开启新对话？当前对话历史将清空。'))return;
-  hist=[];
+  syncCurrentSessionMessages();
+  currentSessionId = 'chat_' + Date.now();
+  hist = [];
+  chatSessions.unshift({
+    id: currentSessionId,
+    title: '新对话',
+    time: Date.now(),
+    messages: []
+  });
   $('msgs').innerHTML='';
   autoSave();
 }
@@ -596,6 +866,13 @@ async function send(){
   addMsg('user', userContent);
   if(cur)F[cur]=$('ed').value;
   hist.push({role:'user',content:userContent});
+  
+  // 如果会话还是默认标题，以第一条提问为标题
+  let s = getCurrentSession();
+  if(s && (s.title === '新对话' || s.title === '历史会话')){
+    let promptTitle = typeof userContent === 'string' ? userContent : (userContent[0]?.text || '图片分析');
+    s.title = promptTitle.slice(0, 24).trim();
+  }
   autoSave();
 
   // 始终把完整代码放进 system，最近10条对话作为上下文
@@ -607,7 +884,7 @@ async function send(){
     const res=await fetch(`${base}/chat/completions`,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':`Bearer ${key}`},
-      body:JSON.stringify({model,messages:[{role:'system',content:sys},...recentHist],temperature:1,stream: false})
+      body:JSON.stringify({model,messages:[{role:'system',content:sys},...recentHist],temperature:0.2,stream: false})
     });
     
     const data=await res.json();
@@ -624,15 +901,13 @@ $('inp').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preve
 (async()=>{
   await openDB();
   await loadAll();
+  isLoaded = true;
   renderTabs();
   $('ed').value=F[cur];
   if(cur) undoStack[cur] = [F[cur]];
   updLn();
   // 恢复聊天记录到界面
-  hist.forEach(h=>{
-    if(h.role==='user')addMsg('user',h.content);
-    else if(h.role==='assistant')addMsg('ai',h.content);
-  });
+  renderMsgs();
 })();
 </script>
 </body>
