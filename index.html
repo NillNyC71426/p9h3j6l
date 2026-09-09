@@ -67,8 +67,11 @@ body{font-family:var(--font);height:100vh;height:100dvh;background:var(--bg);col
 .msg{padding:8px 11px;border-radius:8px;font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word;max-width:92%}
 .msg.user{background:var(--bg4);align-self:flex-end}
 .msg.ai{background:var(--bg3);align-self:flex-start}
+.msg{position:relative}
 .msg .abtn{margin-top:5px;padding:3px 9px;background:var(--green);color:var(--bg);border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600}
 .msg .abtn.applied{background:var(--bg4);color:var(--fg2)}
+.msg .copy-btn{display:inline-block;margin-top:4px;padding:2px 7px;background:transparent;color:var(--fg2);border:1px solid var(--bg4);border-radius:4px;font-size:11px;cursor:pointer;opacity:0.8;transition:all .15s}
+.msg .copy-btn:hover{background:var(--bg3);color:var(--fg);opacity:1}
 .iarea{padding:8px;border-top:1px solid var(--bg3);display:flex;gap:6px;flex-shrink:0}
 .iarea textarea{flex:1;background:var(--bg3);border:1px solid var(--bg4);color:var(--fg);padding:8px;border-radius:6px;font-size:13px;resize:none;height:48px;font-family:var(--font)}
 .iarea button{background:var(--blue);color:var(--bg);border:none;padding:0 14px;border-radius:6px;font-weight:600;cursor:pointer;font-size:13px}
@@ -79,6 +82,12 @@ body{font-family:var(--font);height:100vh;height:100dvh;background:var(--bg);col
 .ftab.active{background:var(--bg3);color:var(--fg)}
 .ed-tools{display:flex;gap:4px;margin-left:auto;flex-shrink:0}
 .ed-tools button{background:var(--bg3);border:1px solid var(--bg4);color:var(--fg2);padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;white-space:nowrap}
+.search-bar{display:none;background:var(--bg2);border-bottom:1px solid var(--bg3);padding:4px 8px;gap:6px;align-items:center;flex-shrink:0}
+.search-bar.show{display:flex}
+.search-bar input{flex:1;background:var(--bg3);border:1px solid var(--bg4);color:var(--fg);padding:4px 8px;border-radius:4px;font-size:12px;outline:none}
+.search-bar button{background:var(--bg3);border:1px solid var(--bg4);color:var(--fg2);padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer}
+.search-bar button:hover{color:var(--fg)}
+.search-bar .scnt{font-size:11px;color:var(--fg2);min-width:46px;text-align:center}
 .ed-wrap{flex:1;display:flex;overflow:hidden}
 .lnums{background:var(--bg2);color:#585b70;padding:10px 6px 10px 2px;font-family:var(--mono);font-size:12px;line-height:1.6;text-align:right;user-select:none;overflow:hidden;min-width:32px;flex-shrink:0}
 .lnums .ln{padding:0 3px}.lnums .ln.err{color:var(--red);background:#f38ba822;cursor:pointer}
@@ -140,16 +149,24 @@ body{font-family:var(--font);height:100vh;height:100dvh;background:var(--bg);col
 
 <div class="cfg-modal" id="cfgModal" onclick="if(event.target===this)this.classList.remove('show')">
   <div class="cfg-box">
-    <label>模型名称（自由填写）</label>
-    <input id="model" type="text" placeholder="如 deepseek-chat, gpt-4o, qwen-plus ...">
     <label>API Key</label>
     <input id="key" type="password" placeholder="sk-...">
     <label>API Base URL</label>
     <input id="base" type="text" placeholder="https://api.deepseek.com/v1">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 4px">
+      <label style="margin:0">模型名称</label>
+      <button onclick="fetchModelList()" style="background:none;border:none;color:var(--blue);font-size:12px;cursor:pointer;padding:0">🔄 获取模型列表</button>
+    </div>
+    <div style="display:flex;gap:6px">
+      <input id="model" type="text" placeholder="如 deepseek-chat, gpt-4o..." style="flex:1">
+      <select id="modelSelect" onchange="if(this.value)$('model').value=this.value" style="display:none;max-width:140px;background:var(--bg3);border:1px solid var(--bg4);color:var(--fg);border-radius:6px;padding:4px;font-size:12px">
+        <option value="">选择模型...</option>
+      </select>
+    </div>
     <div class="test-result" id="testResult"></div>
     <div class="row">
       <button class="btn-test" onclick="testAPI()">🔌 测试连接</button>
-      <button class="btn-ok" onclick="saveCfg()">✓ 保存</button>
+      <button class="btn-ok" onclick="saveCfg()">✓ 保存并关闭</button>
     </div>
   </div>
 </div>
@@ -159,13 +176,12 @@ body{font-family:var(--font);height:100vh;height:100dvh;background:var(--bg);col
 <div class="body">
   <div class="panel p-chat active" id="panelChat">
     <div class="msgs" id="msgs"></div>
-    <div id="imgPreviewWrap" style="display:none;padding:6px 10px;background:var(--bg2);border-top:1px solid var(--bg3);align-items:center;gap:8px;position:relative">
-      <img id="imgPreview" src="" style="height:40px;border-radius:4px;object-fit:cover;border:1px solid var(--bg4)">
-      <button onclick="clearImg()" style="background:var(--red);color:var(--bg);border:none;border-radius:50%;width:16px;height:16px;font-size:10px;cursor:pointer;position:absolute;top:2px;left:42px;display:flex;align-items:center;justify-content:center;font-weight:bold">×</button>
+    <div id="imgPreviewWrap" style="display:none;padding:6px 10px;background:var(--bg2);border-top:1px solid var(--bg3);overflow-x:auto;gap:8px;align-items:center;-webkit-overflow-scrolling:touch">
+      <div id="imgThumbList" style="display:flex;gap:8px;align-items:center"></div>
     </div>
     <div class="iarea">
-      <button onclick="$('imgInput').click()" style="background:var(--bg3);color:var(--fg2);border:1px solid var(--bg4);padding:0 10px;border-radius:6px;cursor:pointer;font-size:16px">📷</button>
-      <input type="file" id="imgInput" accept="image/*" style="display:none" onchange="previewImg(this)">
+      <button onclick="$('imgInput').click()" style="background:var(--bg3);color:var(--fg2);border:1px solid var(--bg4);padding:0 10px;border-radius:6px;cursor:pointer;font-size:16px" title="上传多张图片">📷</button>
+      <input type="file" id="imgInput" accept="image/*" multiple style="display:none" onchange="previewImgs(this)">
       <textarea id="inp" placeholder="描述需求..." rows="2"></textarea>
       <button id="btn" onclick="send()">发送</button>
     </div>
@@ -174,6 +190,7 @@ body{font-family:var(--font);height:100vh;height:100dvh;background:var(--bg);col
     <div class="ed-bar">
       <div id="tabsWrap"></div>
       <div class="ed-tools">
+        <button onclick="toggleSearch()" title="搜索文本">🔍</button>
         <button onclick="openFullscreen()" style="color:var(--green)">▶ 运行</button>
         <button onclick="importFiles()">📂 导入</button>
         <button onclick="addF()">+</button>
@@ -181,6 +198,13 @@ body{font-family:var(--font);height:100vh;height:100dvh;background:var(--bg);col
         <button onclick="delF()">🗑️</button>
         <button onclick="undo()">↩️</button>
       </div>
+    </div>
+    <div class="search-bar" id="searchBar">
+      <input type="text" id="findInp" placeholder="搜索代码..." oninput="onSearchInput()" onkeydown="onSearchKey(event)">
+      <span class="scnt" id="findCnt">0/0</span>
+      <button onclick="findNext(-1)" title="上一个">▲</button>
+      <button onclick="findNext(1)" title="下一个">▼</button>
+      <button onclick="toggleSearch(false)">✕</button>
     </div>
     <div class="ed-wrap">
       <div class="lnums" id="ln"></div>
@@ -480,6 +504,40 @@ const F={'index.html':'<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="UTF-8">
 let cur='index.html',hist=[],conLogs=[],cnts={log:0,warn:0,error:0},errLines=new Set(),undoStack={};
 const $=id=>document.getElementById(id);
 
+// ===== API 与模型拉取 =====
+async function fetchModelList(){
+  const key=$('key').value.trim(), base=$('base').value.trim();
+  const tr=$('testResult');
+  const sel=$('modelSelect');
+  if(!key||!base){
+    tr.className='test-result fail';
+    tr.textContent='❌ 请先填写 Key 和 API Base URL';
+    return;
+  }
+  tr.className='test-result loading';
+  tr.textContent='⏳ 正在获取可用模型列表...';
+  try{
+    const url = base.replace(/\/+$/, '') + '/models';
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${key}` }
+    });
+    const data = await res.json();
+    let list = Array.isArray(data) ? data : (data.data || []);
+    if(!list || !list.length){
+      throw new Error(data.error?.message || '未能拉取到模型列表');
+    }
+    const modelIds = list.map(m => typeof m === 'string' ? m : m.id).filter(Boolean).sort();
+    sel.innerHTML = '<option value="">▼ 选择模型</option>' + modelIds.map(m => `<option value="${m}">${m}</option>`).join('');
+    sel.style.display = 'block';
+    tr.className = 'test-result ok';
+    tr.textContent = `✅ 成功拉取 ${modelIds.length} 个模型，请选择或输入`;
+  }catch(e){
+    tr.className = 'test-result fail';
+    tr.textContent = `❌ 获取失败: ${e.message}`;
+  }
+}
+
 // ===== API 测试 =====
 async function testAPI(){
   const tr=$('testResult');
@@ -750,45 +808,206 @@ function applyEdits(edits,btn){
   btn.disabled=true;
   if(fail.length) alert('部分代码块无法匹配，请检查AI返回的格式是否正确:\n' + fail.join('\n'));
 }
+function copyText(txt, btn){
+  navigator.clipboard.writeText(txt).then(()=>{
+    const old = btn.textContent;
+    btn.textContent = '✓ 已复制';
+    setTimeout(()=>btn.textContent = old, 1500);
+  }).catch(()=>{
+    const ta = document.createElement('textarea');
+    ta.value = txt;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    const old = btn.textContent;
+    btn.textContent = '✓ 已复制';
+    setTimeout(()=>btn.textContent = old, 1500);
+  });
+}
+
+// ===== 代码查找功能（防抖防卡顿） =====
+let searchMatches = [];
+let curSearchIdx = -1;
+let searchDebounceTimer = null;
+
+function toggleSearch(show){
+  const bar = $('searchBar');
+  const isShow = show !== undefined ? show : !bar.classList.contains('show');
+  bar.classList.toggle('show', isShow);
+  if(isShow){
+    $('findInp').focus();
+    $('findInp').select();
+    doSearch(false);
+  } else {
+    searchMatches = [];
+    curSearchIdx = -1;
+    $('findCnt').textContent = '0/0';
+  }
+}
+
+function onSearchInput(){
+  clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(()=>doSearch(false), 150);
+}
+
+function onSearchKey(e){
+  if(e.key === 'Enter'){
+    e.preventDefault();
+    findNext(e.shiftKey ? -1 : 1);
+  } else if(e.key === 'Escape'){
+    toggleSearch(false);
+  }
+}
+
+function doSearch(focusEditor = false){
+  const kw = $('findInp').value;
+  searchMatches = [];
+  curSearchIdx = -1;
+  if(!kw){
+    $('findCnt').textContent = '0/0';
+    return;
+  }
+  const text = $('ed').value;
+  const kwLower = kw.toLowerCase();
+  const textLower = text.toLowerCase();
+  const step = Math.max(1, kw.length);
+  let pos = 0;
+  // 安全匹配上限 1000 处，避免极大文件造成主线程卡死
+  while((pos = textLower.indexOf(kwLower, pos)) !== -1 && searchMatches.length < 1000){
+    searchMatches.push(pos);
+    pos += step;
+  }
+  if(searchMatches.length > 0){
+    // 定位离当前光标最近的匹配项
+    const selStart = $('ed').selectionStart;
+    let foundIdx = searchMatches.findIndex(p => p >= selStart);
+    curSearchIdx = foundIdx !== -1 ? foundIdx : 0;
+    highlightSearchMatch(focusEditor);
+  } else {
+    $('findCnt').textContent = '0/0';
+  }
+}
+
+function findNext(delta){
+  if(!searchMatches.length){
+    doSearch(false);
+    if(!searchMatches.length) return;
+  }
+  curSearchIdx = (curSearchIdx + delta + searchMatches.length) % searchMatches.length;
+  highlightSearchMatch(false);
+}
+
+function highlightSearchMatch(focusEditor = false){
+  if(curSearchIdx < 0 || curSearchIdx >= searchMatches.length) return;
+  const start = searchMatches[curSearchIdx];
+  const kwLen = $('findInp').value.length;
+  const ed = $('ed');
+  
+  // 绝不在搜索打字时夺取焦点，保证退格和输入始终停留在搜索框中
+  if(focusEditor){
+    ed.focus();
+  }
+  ed.setSelectionRange(start, start + kwLen);
+
+  // 平滑滚动代码区域至匹配行
+  const lineNo = ed.value.slice(0, start).split('\n').length;
+  const lineHeight = 12 * 1.6;
+  ed.scrollTop = Math.max(0, (lineNo - 4) * lineHeight);
+  $('ln').scrollTop = ed.scrollTop;
+
+  $('findCnt').textContent = `${curSearchIdx + 1}/${searchMatches.length}${searchMatches.length >= 1000 ? '+' : ''}`;
+}
+
 function addMsg(role,content){
   const d=document.createElement('div');d.className=`msg ${role}`;
   
   let text = '';
-  let imgUrl = '';
+  const imgUrls = [];
   if (Array.isArray(content)) {
     content.forEach(item => {
       if (item.type === 'text') text = item.text;
-      if (item.type === 'image_url') imgUrl = item.image_url.url || item.image_url;
+      if (item.type === 'image_url') imgUrls.push(item.image_url.url || item.image_url);
     });
   } else {
     text = content;
   }
 
-  if (imgUrl) {
-    const img = document.createElement('img');
-    img.src = imgUrl;
-    img.style.maxWidth = '100%';
-    img.style.maxHeight = '200px';
-    img.style.borderRadius = '6px';
-    img.style.display = 'block';
-    img.style.marginBottom = '6px';
-    img.style.cursor = 'pointer';
-    img.onclick = () => {
-      const w = window.open();
-      w.document.write(`<img src="${imgUrl}" style="max-width:100%">`);
-    };
-    d.appendChild(img);
+  if (imgUrls.length > 0) {
+    const imgGrid = document.createElement('div');
+    imgGrid.style.display = 'flex';
+    imgGrid.style.flexWrap = 'wrap';
+    imgGrid.style.gap = '6px';
+    imgGrid.style.marginBottom = '6px';
+    imgUrls.forEach(url => {
+      const img = document.createElement('img');
+      img.src = url;
+      img.style.maxWidth = imgUrls.length > 1 ? '48%' : '100%';
+      img.style.maxHeight = '180px';
+      img.style.borderRadius = '6px';
+      img.style.objectFit = 'cover';
+      img.style.cursor = 'pointer';
+      img.onclick = () => {
+        const w = window.open();
+        w.document.write(`<img src="${url}" style="max-width:100%">`);
+      };
+      imgGrid.appendChild(img);
+    });
+    d.appendChild(imgGrid);
   }
 
   const s=document.createElement('span');s.textContent=text;d.appendChild(s);
   
+  if(role==='user' && text){
+    const copyBar = document.createElement('div');
+    const cpBtn = document.createElement('button');
+    cpBtn.className = 'copy-btn';
+    cpBtn.textContent = '📋 复制内容';
+    cpBtn.onclick = () => copyText(text, cpBtn);
+    copyBar.appendChild(cpBtn);
+    d.appendChild(copyBar);
+  }
+
   if(role==='ai'){
-    const edits=parseEdits(text);
-    if(edits.length){const b=document.createElement('button');b.className='abtn';b.textContent=`🔧 应用${edits.length}处修改`;b.onclick=()=>applyEdits(edits,b);d.appendChild(b)}
-    const cb=[...text.matchAll(/```[\w]*\n([\s\S]*?)```/g)];
-        if(!edits.length&&cb.length){const b=document.createElement('button');b.className='abtn';b.textContent='📋 替换文件';b.onclick=()=>{if(!cur)return; F[cur]=cb.map(m=>m[1].trim()).join('\n\n');$('ed').value=F[cur];pushState(F[cur]);updLn();autoSave();b.textContent='✅ 已替换';b.classList.add('applied');b.disabled=true};d.appendChild(b)}
+    attachAiActions(d, text);
   }
   $('msgs').appendChild(d);$('msgs').scrollTop=99999;
+}
+
+function attachAiActions(dom, text){
+  const edits=parseEdits(text);
+  if(edits.length){const b=document.createElement('button');b.className='abtn';b.textContent=`🔧 应用${edits.length}处修改`;b.onclick=()=>applyEdits(edits,b);dom.appendChild(b)}
+  const cb=[...text.matchAll(/```[\w]*\n([\s\S]*?)```/g)];
+  if(!edits.length&&cb.length){const b=document.createElement('button');b.className='abtn';b.textContent='📋 替换文件';b.onclick=()=>{if(!cur)return; F[cur]=cb.map(m=>m[1].trim()).join('\n\n');$('ed').value=F[cur];pushState(F[cur]);updLn();autoSave();b.textContent='✅ 已替换';b.classList.add('applied');b.disabled=true};dom.appendChild(b)}
+  
+  const copyBar = document.createElement('div');
+  const cpBtn = document.createElement('button');
+  cpBtn.className = 'copy-btn';
+  cpBtn.textContent = '📋 复制回答';
+  cpBtn.onclick = () => copyText(text, cpBtn);
+  copyBar.appendChild(cpBtn);
+  dom.appendChild(copyBar);
+}
+
+function createAiStreamMsg(){
+  const d = document.createElement('div');
+  d.className = 'msg ai';
+  const span = document.createElement('span');
+  d.appendChild(span);
+  $('msgs').appendChild(d);
+  $('msgs').scrollTop = 99999;
+  return {
+    dom: d,
+    append(text){
+      span.textContent = text;
+      $('msgs').scrollTop = 99999;
+    },
+    finish(finalText){
+      span.textContent = finalText;
+      attachAiActions(d, finalText);
+      $('msgs').scrollTop = 99999;
+    }
+  };
 }
 const SYS = `你是专业的前端编程助手，请严格按照 SEARCH/REPLACE 格式进行增量代码编辑。请务必不要输出‘’之类的乱码字符。
 
@@ -826,41 +1045,97 @@ function newChat(){
   autoSave();
 }
 
-let pendingImgBase64 = null;
-function previewImg(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    pendingImgBase64 = e.target.result;
-    $('imgPreview').src = pendingImgBase64;
-    $('imgPreviewWrap').style.display = 'flex';
-  };
-  reader.readAsDataURL(file);
+let pendingImages = []; // 存储多张 base64 图片
+
+function compressImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1024;
+        let w = img.width, h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.75));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
+
+async function previewImgs(input) {
+  const files = [...input.files];
+  if (!files.length) return;
+  for (const f of files) {
+    try {
+      const b64 = await compressImageFile(f);
+      pendingImages.push(b64);
+    } catch (e) {
+      console.error('图片压缩失败', e);
+    }
+  }
+  input.value = '';
+  renderImgPreviews();
+}
+
+function removeImg(idx) {
+  pendingImages.splice(idx, 1);
+  renderImgPreviews();
+}
+
+function renderImgPreviews() {
+  const wrap = $('imgPreviewWrap');
+  const list = $('imgThumbList');
+  if (!pendingImages.length) {
+    wrap.style.display = 'none';
+    list.innerHTML = '';
+    return;
+  }
+  wrap.style.display = 'flex';
+  list.innerHTML = pendingImages.map((b64, idx) => `
+    <div style="position:relative;flex-shrink:0;display:inline-block">
+      <img src="${b64}" style="height:44px;width:44px;border-radius:4px;object-fit:cover;border:1px solid var(--bg4);display:block">
+      <button onclick="removeImg(${idx})" style="background:var(--red);color:var(--bg);border:none;border-radius:50%;width:16px;height:16px;font-size:10px;cursor:pointer;position:absolute;top:-4px;right:-4px;display:flex;align-items:center;justify-content:center;font-weight:bold">×</button>
+    </div>
+  `).join('');
+}
+
 function clearImg() {
-  pendingImgBase64 = null;
-  $('imgInput').value = '';
-  $('imgPreview').src = '';
-  $('imgPreviewWrap').style.display = 'none';
+  pendingImages = [];
+  renderImgPreviews();
 }
 
 async function send(){
   const msg=$('inp').value.trim();
-  if(!msg && !pendingImgBase64) return;
+  if(!msg && !pendingImages.length) return;
   const key=$('key').value.trim(),base=$('base').value.trim(),model=$('model').value.trim();
   if(!key||!base||!model){$('cfgModal').classList.add('show');return}
   
   let userContent = msg;
-  if(pendingImgBase64) {
+  if(pendingImages.length > 0) {
     userContent = [
-      { type: 'text', text: msg || '请分析这张图片。' },
-      { type: 'image_url', image_url: { url: pendingImgBase64 } }
+      { type: 'text', text: msg || `请分析这 ${pendingImages.length} 张图片。` },
+      ...pendingImages.map(b64 => ({ type: 'image_url', image_url: { url: b64, detail: 'low' } }))
     ];
   }
 
   $('inp').value='';
-  const tempImg = pendingImgBase64;
   clearImg();
   
   addMsg('user', userContent);
@@ -879,19 +1154,74 @@ async function send(){
   const sys=SYS+(cur?`\n\n当前文件:${cur}\n完整代码:\n\`\`\`\n${F[cur]}\n\`\`\``:'\n\n(当前无打开的文件)');
   const recentHist=hist.slice(-10);
 
+  // 【核心省Token】历史轮次中已看过的旧图片不重复携带巨大 Base64，仅保留当前轮最新图片
+  const cleanMessages = recentHist.map((m, idx) => {
+    const isLatest = idx === recentHist.length - 1;
+    if (Array.isArray(m.content)) {
+      if (isLatest) return m;
+      const textOnly = m.content
+        .filter(c => c.type === 'text')
+        .map(c => c.text)
+        .join('\n');
+      const imgCount = m.content.filter(c => c.type === 'image_url').length;
+      return { role: m.role, content: (textOnly || '分析图片') + `\n[上一轮已分析过的 ${imgCount} 张图片]` };
+    }
+    return m;
+  });
+
   $('btn').disabled=true;
+  const streamUi = createAiStreamMsg();
+  let fullReply = '';
+
   try{
     const res=await fetch(`${base}/chat/completions`,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':`Bearer ${key}`},
-      body:JSON.stringify({model,messages:[{role:'system',content:sys},...recentHist],temperature:0.2,stream: false})
+      body:JSON.stringify({model,messages:[{role:'system',content:sys},...cleanMessages],temperature:1,stream: true})
     });
-    
-    const data=await res.json();
-    const reply=data.choices?.[0]?.message?.content||JSON.stringify(data).slice(0,200);
-    hist.push({role:'assistant',content:reply});
-    addMsg('ai',reply);autoSave();
-  }catch(e){addMsg('ai','出错:'+e.message)}
+
+    if(!res.ok){
+      const errText = await res.text();
+      throw new Error(`HTTP ${res.status}: ${errText}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    while(true){
+      const { done, value } = await reader.read();
+      if(done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // 保留最后一行未闭合的数据
+
+      for(const line of lines){
+        const trimmed = line.trim();
+        if(!trimmed || !trimmed.startsWith('data:')) continue;
+        const dataStr = trimmed.replace(/^data:\s*/, '');
+        if(dataStr === '[DONE]') continue;
+        try{
+          const json = JSON.parse(dataStr);
+          const chunk = json.choices?.[0]?.delta?.content || '';
+          if(chunk){
+            fullReply += chunk;
+            streamUi.append(fullReply);
+          }
+        }catch(ignore){}
+      }
+    }
+
+    if(!fullReply){
+      fullReply = '(空回复)';
+    }
+
+    hist.push({role:'assistant',content:fullReply});
+    streamUi.finish(fullReply);
+    autoSave();
+  }catch(e){
+    streamUi.finish('请求出错: ' + e.message);
+  }
   $('btn').disabled=false;
 }
 
