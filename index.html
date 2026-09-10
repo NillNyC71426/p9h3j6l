@@ -188,7 +188,6 @@ body{font-family:var(--font);height:100vh;height:100dvh;background:var(--bg);col
     <div class="iarea">
       <button onclick="$('imgInput').click()" style="background:var(--bg3);color:var(--fg2);border:1px solid var(--bg4);padding:0 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold" title="上传图片">IMG</button>
       <button id="planBtn" onclick="togglePlanMode()" style="background:var(--bg3);color:var(--fg2);border:1px solid var(--bg4);padding:0 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold" title="开启后AI将先规划再执行">Plan: Off</button>
-      <button id="ctxBtn" onclick="toggleCtxMode()" style="background:var(--blue);color:var(--bg);border:none;padding:0 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold" title="点击切换是否携带完整文件代码给AI">Ctx: Full</button>
       <input type="file" id="imgInput" accept="image/*" multiple style="display:none" onchange="previewImgs(this)">
       <textarea id="inp" placeholder="Describe requirement..." rows="2"></textarea>
       <button id="btn" onclick="send()">Send</button>
@@ -344,24 +343,6 @@ document.addEventListener('visibilitychange', ()=>{
 let isLoaded = false;
 let savedConfig = { model: '', key: '', base: '' };
 let planMode = false;
-let ctxMode = true;
-
-function toggleCtxMode(){
-  ctxMode = !ctxMode;
-  const btn = $('ctxBtn');
-  if(ctxMode){
-    btn.textContent = 'Ctx: Full';
-    btn.style.background = 'var(--blue)';
-    btn.style.color = 'var(--bg)';
-    btn.style.border = 'none';
-  } else {
-    btn.textContent = 'Ctx: Off';
-    btn.style.background = 'var(--bg3)';
-    btn.style.color = 'var(--fg2)';
-    btn.style.border = '1px solid var(--bg4)';
-  }
-  dbPut('ctxMode', ctxMode);
-}
 
 function togglePlanMode(){
   planMode = !planMode;
@@ -501,10 +482,8 @@ async function loadAll(){
   const sessions = await dbGet('chatSessions');
   const curSid = await dbGet('currentSessionId');
   const pm = await dbGet('planMode');
-  const cm = await dbGet('ctxMode');
 
   if(pm) togglePlanMode();
-  if(cm === false) toggleCtxMode();
 
   if(files){Object.keys(F).forEach(k=>{if(!files[k])delete F[k]});Object.assign(F,files)}
   if(cf&&F[cf])cur=cf;
@@ -1196,12 +1175,9 @@ function clearImg() {
   renderImgPreviews();
 }
 
-let autoSearchCount = 0;
-async function send(isAuto = false){
-  if(!isAuto) autoSearchCount = 0; // 如果是人类手动点击/回车，则重置搜索次数
+async function send(){
   let msg=$('inp').value.trim();
   
-  // 如果编辑器有选中文字，自动附带在问题中（尤其是关闭全量上下文时非常有用）
   if (cur && $('ed').selectionStart !== $('ed').selectionEnd) {
     const selCode = $('ed').value.substring($('ed').selectionStart, $('ed').selectionEnd);
     if (selCode.trim()) {
@@ -1228,7 +1204,6 @@ async function send(isAuto = false){
   if(cur)F[cur]=$('ed').value;
   hist.push({role:'user',content:userContent});
   
-  // 如果会话还是默认标题，以第一条提问为标题
   let s = getCurrentSession();
   if(s && (s.title === '新对话' || s.title === '历史会话')){
     let promptTitle = typeof userContent === 'string' ? userContent : (userContent[0]?.text || '图片分析');
@@ -1236,18 +1211,14 @@ async function send(isAuto = false){
   }
   autoSave();
 
-  // 最近10条对话作为上下文
   let sys = SYS;
-  if (ctxMode && cur) {
+  if (cur) {
     sys += `\n\n当前文件:${cur}\n完整代码:\n\`\`\`\n${F[cur]}\n\`\`\``;
-  } else {
-    sys += `\n\n(提示：为节省Token，当前未提供 ${cur} 的完整代码。\n如果你不知道要修改的代码具体是什么样的，请先回复 \`<search>你想查找的函数名、变量或特征字符串</search>\`，系统将自动搜索并返回对应的代码片段给你。待你拿到足够的局部代码后，再给出修改方案。)`;
   }
-  const recentHist=hist.slice(-10);
 
-  // 【核心省Token】历史轮次中已看过的旧图片不重复携带巨大 Base64，仅保留当前轮最新图片
-  const cleanMessages = recentHist.map((m, idx) => {
-    const isLatest = idx === recentHist.length - 1;
+  // 发送完整对话历史
+  const cleanMessages = hist.map((m, idx) => {
+    const isLatest = idx === hist.length - 1;
     let contentToSend = m.content;
     
     if (isLatest && planMode && m.role === 'user') {
@@ -1298,7 +1269,7 @@ async function send(isAuto = false){
       if(done) break;
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
-      buffer = lines.pop(); // 保留最后一行未闭合的数据
+      buffer = lines.pop();
 
       for(const line of lines){
         const trimmed = line.trim();
@@ -1323,43 +1294,6 @@ async function send(isAuto = false){
     hist.push({role:'assistant',content:fullReply});
     streamUi.finish(fullReply);
     autoSave();
-    
-    // 自动处理 AI 的 <search> 请求
-    if (!ctxMode && cur) {
-      const sm = fullReply.match(/<search>([\s\S]*?)<\/search>/);
-      if (sm) {
-        const keyword = sm[1].trim();
-        const lines = F[cur].split('\n');
-        const matches = [];
-        for (let i = 0; i < lines.length; i++) {
-          if (lines[i].includes(keyword)) matches.push(i);
-        }
-        let searchResult = `未在代码中找到包含 "${keyword}" 的内容，请尝试搜索其他关键字。`;
-        if (matches.length > 0) {
-          let res = [];
-          for (let i = 0; i < Math.min(3, matches.length); i++) {
-            const idx = matches[i];
-            const start = Math.max(0, idx - 15); // 往前取15行
-            const end = Math.min(lines.length, idx + 25); // 往后取25行
-            res.push(`-- 匹配 ${i+1} (行 ${start+1} - ${end}):\n\`\`\`\n${lines.slice(start, end).join('\n')}\n\`\`\``);
-          }
-          if (matches.length > 3) res.push(`(还有 ${matches.length - 3} 处匹配未展示)`);
-          searchResult = `找到 "${keyword}" 的相关代码:\n\n${res.join('\n\n')}`;
-        }
-        
-        // 模拟用户自动将搜索结果发送给AI
-        setTimeout(() => {
-          autoSearchCount++;
-          if (autoSearchCount > 3) {
-            // 连续超过3次，强行熔断
-            $('inp').value = "⚠️ [系统拦截] AI连续搜索已超过3次，为防止过度消耗Token已暂停自动请求。请人工检查前面的对话或重新给予指令。";
-            return;
-          }
-          $('inp').value = `[系统自动返回搜索结果]\n${searchResult}`;
-          send(true);
-        }, 1500);
-      }
-    }
   }catch(e){
     streamUi.finish('请求出错: ' + e.message);
   }
