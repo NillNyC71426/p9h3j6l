@@ -28,7 +28,7 @@
 <title>AI 编程助手</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#1e1e2e;--bg2:#181825;--bg3:#313244;--bg4:#45475a;--fg:#cdd6f4;--fg2:#a6adc8;--blue:#89b4fa;--green:#a6e3a1;--red:#f38ba8;--yellow:#f9e2af;--font:-apple-system,sans-serif;--mono:'Fira Code','Consolas',monospace}
+:root{--bg:#1e1e1e;--bg2:#252526;--bg3:#2d2d2d;--bg4:#3e3e42;--fg:#d4d4d4;--fg2:#858585;--blue:#007acc;--green:#6a9955;--red:#f48771;--yellow:#cca700;--font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;--mono:"Consolas","Courier New",monospace}
 body{font-family:var(--font);height:100vh;height:100dvh;background:var(--bg);color:var(--fg);display:flex;flex-direction:column;overflow:hidden}
 .hdr{padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--bg3);display:flex;align-items:center;gap:8px;flex-shrink:0}
 .hdr h1{font-size:14px;white-space:nowrap}
@@ -72,6 +72,12 @@ body{font-family:var(--font);height:100vh;height:100dvh;background:var(--bg);col
 .msg .abtn.applied{background:var(--bg4);color:var(--fg2)}
 .msg .copy-btn{display:inline-block;margin-top:4px;padding:2px 7px;background:transparent;color:var(--fg2);border:1px solid var(--bg4);border-radius:4px;font-size:11px;cursor:pointer;opacity:0.8;transition:all .15s}
 .msg .copy-btn:hover{background:var(--bg3);color:var(--fg);opacity:1}
+.plan-box{margin-bottom:8px;border-left:2px solid var(--blue);background:var(--bg2);padding:8px 12px;border-radius:4px;font-size:12px;color:var(--fg2);display:none;position:relative;overflow:hidden;white-space:pre-wrap;word-break:break-word}
+.plan-hdr{display:flex;align-items:center;gap:6px;font-weight:600;margin-bottom:6px;color:var(--blue);font-size:11px;text-transform:uppercase;letter-spacing:0.5px}
+.plan-spinner{width:12px;height:12px;border:2px solid var(--bg4);border-top-color:var(--blue);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.plan-box.scanning::after{content:'';position:absolute;top:0;left:-100%;width:50%;height:100%;background:linear-gradient(90deg,transparent,rgba(0,122,204,0.1),transparent);animation:scan 2s infinite;pointer-events:none}
+@keyframes scan{100%{left:200%}}
 .iarea{padding:8px;border-top:1px solid var(--bg3);display:flex;gap:6px;flex-shrink:0}
 .iarea textarea{flex:1;background:var(--bg3);border:1px solid var(--bg4);color:var(--fg);padding:8px;border-radius:6px;font-size:13px;resize:none;height:48px;font-family:var(--font)}
 .iarea button{background:var(--blue);color:var(--bg);border:none;padding:0 14px;border-radius:6px;font-weight:600;cursor:pointer;font-size:13px}
@@ -128,18 +134,18 @@ body{font-family:var(--font);height:100vh;height:100dvh;background:var(--bg);col
 <body>
 
 <div class="hdr">
-  <h1>🤖 AI编程</h1>
-  <button class="cfg-btn" id="kaBtn" onclick="toggleKeepAlive()" title="播放无声音频防止手机后台清理">🛡️ 保活: 关</button>
-  <button class="cfg-btn" onclick="openChatMgr()">💬 记录</button>
-  <button class="cfg-btn" onclick="newChat()" style="color:var(--green);border-color:var(--green)">＋ 新对话</button>
-  <button class="cfg-btn" onclick="$('cfgModal').classList.add('show')">⚙ 设置</button>
+  <h1>AI Coder</h1>
+  <button class="cfg-btn" id="kaBtn" onclick="toggleKeepAlive()" title="播放无声音频防止手机后台清理">KeepAlive: Off</button>
+  <button class="cfg-btn" onclick="openChatMgr()">History</button>
+  <button class="cfg-btn" onclick="newChat()" style="color:var(--green);border-color:var(--green)">+ New Chat</button>
+  <button class="cfg-btn" onclick="$('cfgModal').classList.add('show')">Settings</button>
 </div>
 
 <!-- 对话记录管理弹窗 -->
 <div class="chat-mgr-modal" id="chatMgrModal" onclick="if(event.target===this)this.classList.remove('show')">
   <div class="chat-mgr-box">
     <div class="chat-mgr-hdr">
-      <h3>💬 对话历史记录</h3>
+      <h3>Chat History</h3>
       <button onclick="$('chatMgrModal').classList.remove('show')">✕</button>
     </div>
     <div class="chat-list" id="chatList"></div>
@@ -154,19 +160,19 @@ body{font-family:var(--font);height:100vh;height:100dvh;background:var(--bg);col
     <label>API Base URL</label>
     <input id="base" type="text" placeholder="https://api.deepseek.com/v1">
     <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 4px">
-      <label style="margin:0">模型名称</label>
-      <button onclick="fetchModelList()" style="background:none;border:none;color:var(--blue);font-size:12px;cursor:pointer;padding:0">🔄 获取模型列表</button>
+      <label style="margin:0">Model Name</label>
+      <button onclick="fetchModelList()" style="background:none;border:none;color:var(--blue);font-size:12px;cursor:pointer;padding:0">Fetch Models</button>
     </div>
     <div style="display:flex;gap:6px">
-      <input id="model" type="text" placeholder="如 deepseek-chat, gpt-4o..." style="flex:1">
+      <input id="model" type="text" placeholder="e.g. deepseek-chat, gpt-4o..." style="flex:1">
       <select id="modelSelect" onchange="if(this.value)$('model').value=this.value" style="display:none;max-width:140px;background:var(--bg3);border:1px solid var(--bg4);color:var(--fg);border-radius:6px;padding:4px;font-size:12px">
-        <option value="">选择模型...</option>
+        <option value="">Select...</option>
       </select>
     </div>
     <div class="test-result" id="testResult"></div>
     <div class="row">
-      <button class="btn-test" onclick="testAPI()">🔌 测试连接</button>
-      <button class="btn-ok" onclick="saveCfg()">✓ 保存并关闭</button>
+      <button class="btn-test" onclick="testAPI()">Test Connection</button>
+      <button class="btn-ok" onclick="saveCfg()">Save & Close</button>
     </div>
   </div>
 </div>
@@ -180,30 +186,31 @@ body{font-family:var(--font);height:100vh;height:100dvh;background:var(--bg);col
       <div id="imgThumbList" style="display:flex;gap:8px;align-items:center"></div>
     </div>
     <div class="iarea">
-      <button onclick="$('imgInput').click()" style="background:var(--bg3);color:var(--fg2);border:1px solid var(--bg4);padding:0 10px;border-radius:6px;cursor:pointer;font-size:16px" title="上传多张图片">📷</button>
+      <button onclick="$('imgInput').click()" style="background:var(--bg3);color:var(--fg2);border:1px solid var(--bg4);padding:0 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold" title="上传图片">IMG</button>
+      <button id="planBtn" onclick="togglePlanMode()" style="background:var(--bg3);color:var(--fg2);border:1px solid var(--bg4);padding:0 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold" title="开启后AI将先规划再执行">Plan: Off</button>
       <input type="file" id="imgInput" accept="image/*" multiple style="display:none" onchange="previewImgs(this)">
-      <textarea id="inp" placeholder="描述需求..." rows="2"></textarea>
-      <button id="btn" onclick="send()">发送</button>
+      <textarea id="inp" placeholder="Describe requirement..." rows="2"></textarea>
+      <button id="btn" onclick="send()">Send</button>
     </div>
   </div>
   <div class="panel p-edit" id="panelEdit">
     <div class="ed-bar">
       <div id="tabsWrap"></div>
       <div class="ed-tools">
-        <button onclick="toggleSearch()" title="搜索文本">🔍</button>
-        <button onclick="openFullscreen()" style="color:var(--green)">▶ 运行</button>
-        <button onclick="importFiles()">📂 导入</button>
-        <button onclick="addF()">+</button>
-        <button onclick="dl()">💾</button>
-        <button onclick="delF()">🗑️</button>
-        <button onclick="undo()">↩️</button>
+        <button onclick="toggleSearch()" title="Search">Find</button>
+        <button onclick="openFullscreen()" style="color:var(--green)">Run</button>
+        <button onclick="importFiles()">Import</button>
+        <button onclick="addF()">New</button>
+        <button onclick="dl()">DL</button>
+        <button onclick="delF()">Del</button>
+        <button onclick="undo()">Undo</button>
       </div>
     </div>
     <div class="search-bar" id="searchBar">
-      <input type="text" id="findInp" placeholder="搜索代码..." oninput="onSearchInput()" onkeydown="onSearchKey(event)">
+      <input type="text" id="findInp" placeholder="Search..." oninput="onSearchInput()" onkeydown="onSearchKey(event)">
       <span class="scnt" id="findCnt">0/0</span>
-      <button onclick="findNext(-1)" title="上一个">▲</button>
-      <button onclick="findNext(1)" title="下一个">▼</button>
+      <button onclick="findNext(-1)" title="Prev">▲</button>
+      <button onclick="findNext(1)" title="Next">▼</button>
       <button onclick="toggleSearch(false)">✕</button>
     </div>
     <div class="ed-wrap">
@@ -219,23 +226,23 @@ body{font-family:var(--font);height:100vh;height:100dvh;background:var(--bg);col
         <span class="badge l" id="cntL">0</span>
         <span class="badge w" id="cntW">0</span>
         <span class="badge e" id="cntE">0</span>
-        <button onclick="clearCon()">🗑</button>
+        <button onclick="clearCon()">Clear</button>
         <button onclick="$('conPanel').classList.add('hidden')">✕</button>
       </div>
       <div class="con-body" id="conBody"></div><div class="con-inp"><span>›</span><input id="conInp" placeholder="执行JS..."></div>
     </div>    <div class="pv-tools">
-      <button onclick="runPreview()">▶ 刷新预览</button>
-      <button onclick="openFullscreen()">↗ 全屏运行</button>
-      <button onclick="$('conPanel').classList.toggle('hidden')">📟 控制台</button>
-      <button onclick="sendErrsToAI()" class="fix" id="fixBtn" style="display:none">🔧 AI修复</button>
+      <button onclick="runPreview()">Refresh</button>
+      <button onclick="openFullscreen()">Fullscreen</button>
+      <button onclick="$('conPanel').classList.toggle('hidden')">Console</button>
+      <button onclick="sendErrsToAI()" class="fix" id="fixBtn" style="display:none">Auto Fix</button>
     </div>
   </div>
 </div>
 
 <div class="nav" id="nav">
-  <button class="active" onclick="showPanel(0)"><span class="ico">💬</span>聊天</button>
-  <button onclick="showPanel(1)"><span class="ico">📝</span>编辑</button>
-  <button onclick="showPanel(2)"><span class="ico">👁</span>预览</button>
+  <button class="active" onclick="showPanel(0)">Chat</button>
+  <button onclick="showPanel(1)">Editor</button>
+  <button onclick="showPanel(2)">Preview</button>
 </div>
 
 <script>
@@ -276,11 +283,11 @@ function updateKaBtn(){
   const btn = $('kaBtn');
   if(!btn) return;
   if(keepAliveActive){
-    btn.textContent = '🛡️ 保活中';
+    btn.textContent = 'KeepAlive: On';
     btn.style.color = 'var(--green)';
     btn.style.borderColor = 'var(--green)';
   } else {
-    btn.textContent = '🛡️ 保活: 关';
+    btn.textContent = 'KeepAlive: Off';
     btn.style.color = 'var(--fg2)';
     btn.style.borderColor = 'var(--bg4)';
   }
@@ -335,6 +342,22 @@ document.addEventListener('visibilitychange', ()=>{
 
 let isLoaded = false;
 let savedConfig = { model: '', key: '', base: '' };
+let planMode = false;
+
+function togglePlanMode(){
+  planMode = !planMode;
+  const btn = $('planBtn');
+  if(planMode){
+    btn.textContent = 'Plan: On';
+    btn.style.color = 'var(--blue)';
+    btn.style.borderColor = 'var(--blue)';
+  } else {
+    btn.textContent = 'Plan: Off';
+    btn.style.color = 'var(--fg2)';
+    btn.style.borderColor = 'var(--bg4)';
+  }
+  dbPut('planMode', planMode);
+}
 
 // ===== 对话多会话管理 =====
 let chatSessions = []; // { id, title, time, messages: [] }
@@ -382,7 +405,7 @@ function renderChatList(){
         <div class="chat-item-title">${safeTitle}</div>
         <div class="chat-item-sub">${dateStr} · ${count} 条消息</div>
       </div>
-      <button class="chat-item-del" title="删除对话" onclick="event.stopPropagation();delChatSession('${s.id}')">🗑️</button>
+      <button class="chat-item-del" title="删除对话" onclick="event.stopPropagation();delChatSession('${s.id}')">Del</button>
     </div>`;
   }).join('');
 }
@@ -458,6 +481,9 @@ async function loadAll(){
   const ka=await dbGet('keepAlive');
   const sessions = await dbGet('chatSessions');
   const curSid = await dbGet('currentSessionId');
+  const pm = await dbGet('planMode');
+
+  if(pm) togglePlanMode();
 
   if(files){Object.keys(F).forEach(k=>{if(!files[k])delete F[k]});Object.assign(F,files)}
   if(cf&&F[cf])cur=cf;
@@ -511,11 +537,11 @@ async function fetchModelList(){
   const sel=$('modelSelect');
   if(!key||!base){
     tr.className='test-result fail';
-    tr.textContent='❌ 请先填写 Key 和 API Base URL';
+    tr.textContent='Error: 请先填写 Key 和 API Base URL';
     return;
   }
   tr.className='test-result loading';
-  tr.textContent='⏳ 正在获取可用模型列表...';
+  tr.textContent='Loading: 正在获取可用模型列表...';
   try{
     const url = base.replace(/\/+$/, '') + '/models';
     const res = await fetch(url, {
@@ -531,10 +557,10 @@ async function fetchModelList(){
     sel.innerHTML = '<option value="">▼ 选择模型</option>' + modelIds.map(m => `<option value="${m}">${m}</option>`).join('');
     sel.style.display = 'block';
     tr.className = 'test-result ok';
-    tr.textContent = `✅ 成功拉取 ${modelIds.length} 个模型，请选择或输入`;
+    tr.textContent = `Success: 成功拉取 ${modelIds.length} 个模型，请选择或输入`;
   }catch(e){
     tr.className = 'test-result fail';
-    tr.textContent = `❌ 获取失败: ${e.message}`;
+    tr.textContent = `Error: 获取失败: ${e.message}`;
   }
 }
 
@@ -542,8 +568,8 @@ async function fetchModelList(){
 async function testAPI(){
   const tr=$('testResult');
   const key=$('key').value.trim(),base=$('base').value.trim(),model=$('model').value.trim();
-  if(!key||!base||!model){tr.className='test-result fail';tr.textContent='❌ 请填写完整的模型名、Key和URL';return}
-  tr.className='test-result loading';tr.textContent='⏳ 测试中...';
+  if(!key||!base||!model){tr.className='test-result fail';tr.textContent='Error: 请填写完整的模型名、Key和URL';return}
+  tr.className='test-result loading';tr.textContent='Loading: 测试中...';
   try{
     const res=await fetch(`${base}/chat/completions`,{
       method:'POST',
@@ -551,9 +577,9 @@ async function testAPI(){
       body:JSON.stringify({model,messages:[{role:'user',content:'Hi'}],max_tokens:1})
     });
     const data=await res.json();
-    if(data.choices){tr.className='test-result ok';tr.textContent=`✅ 连接成功！模型: ${data.model||model}`}
-    else{tr.className='test-result fail';tr.textContent=`❌ ${data.error?.message||JSON.stringify(data).slice(0,100)}`}
-  }catch(e){tr.className='test-result fail';tr.textContent=`❌ 连接失败: ${e.message}`}
+    if(data.choices){tr.className='test-result ok';tr.textContent=`Success: 连接成功！模型: ${data.model||model}`}
+    else{tr.className='test-result fail';tr.textContent=`Error: ${data.error?.message||JSON.stringify(data).slice(0,100)}`}
+  }catch(e){tr.className='test-result fail';tr.textContent=`Error: 连接失败: ${e.message}`}
 }
 
 async function saveCfg(){
@@ -803,7 +829,7 @@ function applyEdits(edits,btn){
   pushState(code);
   updLn();
   autoSave();
-  btn.textContent=fail.length?`⚠️ ${ok}/${edits.length} (部分失败)`:`✅ ${ok}处已应用`;
+  btn.textContent=fail.length?`Warning: ${ok}/${edits.length} (部分失败)`:`Applied: ${ok}处已应用`;
   btn.classList.add('applied');
   btn.disabled=true;
   if(fail.length) alert('部分代码块无法匹配，请检查AI返回的格式是否正确:\n' + fail.join('\n'));
@@ -811,7 +837,7 @@ function applyEdits(edits,btn){
 function copyText(txt, btn){
   navigator.clipboard.writeText(txt).then(()=>{
     const old = btn.textContent;
-    btn.textContent = '✓ 已复制';
+    btn.textContent = 'Copied';
     setTimeout(()=>btn.textContent = old, 1500);
   }).catch(()=>{
     const ta = document.createElement('textarea');
@@ -821,7 +847,7 @@ function copyText(txt, btn){
     document.execCommand('copy');
     document.body.removeChild(ta);
     const old = btn.textContent;
-    btn.textContent = '✓ 已复制';
+    btn.textContent = 'Copied';
     setTimeout(()=>btn.textContent = old, 1500);
   });
 }
@@ -962,7 +988,7 @@ function addMsg(role,content){
     const copyBar = document.createElement('div');
     const cpBtn = document.createElement('button');
     cpBtn.className = 'copy-btn';
-    cpBtn.textContent = '📋 复制内容';
+    cpBtn.textContent = 'Copy Text';
     cpBtn.onclick = () => copyText(text, cpBtn);
     copyBar.appendChild(cpBtn);
     d.appendChild(copyBar);
@@ -976,14 +1002,14 @@ function addMsg(role,content){
 
 function attachAiActions(dom, text){
   const edits=parseEdits(text);
-  if(edits.length){const b=document.createElement('button');b.className='abtn';b.textContent=`🔧 应用${edits.length}处修改`;b.onclick=()=>applyEdits(edits,b);dom.appendChild(b)}
+  if(edits.length){const b=document.createElement('button');b.className='abtn';b.textContent=`Apply ${edits.length} Edits`;b.onclick=()=>applyEdits(edits,b);dom.appendChild(b)}
   const cb=[...text.matchAll(/```[\w]*\n([\s\S]*?)```/g)];
-  if(!edits.length&&cb.length){const b=document.createElement('button');b.className='abtn';b.textContent='📋 替换文件';b.onclick=()=>{if(!cur)return; F[cur]=cb.map(m=>m[1].trim()).join('\n\n');$('ed').value=F[cur];pushState(F[cur]);updLn();autoSave();b.textContent='✅ 已替换';b.classList.add('applied');b.disabled=true};dom.appendChild(b)}
+  if(!edits.length&&cb.length){const b=document.createElement('button');b.className='abtn';b.textContent='Replace File';b.onclick=()=>{if(!cur)return; F[cur]=cb.map(m=>m[1].trim()).join('\n\n');$('ed').value=F[cur];pushState(F[cur]);updLn();autoSave();b.textContent='Applied';b.classList.add('applied');b.disabled=true};dom.appendChild(b)}
   
   const copyBar = document.createElement('div');
   const cpBtn = document.createElement('button');
   cpBtn.className = 'copy-btn';
-  cpBtn.textContent = '📋 复制回答';
+  cpBtn.textContent = 'Copy Reply';
   cpBtn.onclick = () => copyText(text, cpBtn);
   copyBar.appendChild(cpBtn);
   dom.appendChild(copyBar);
@@ -992,18 +1018,46 @@ function attachAiActions(dom, text){
 function createAiStreamMsg(){
   const d = document.createElement('div');
   d.className = 'msg ai';
+  
+  const planBox = document.createElement('div');
+  planBox.className = 'plan-box scanning';
+  const planHdr = document.createElement('div');
+  planHdr.className = 'plan-hdr';
+  planHdr.innerHTML = '<div class="plan-spinner"></div><span>Planning & Reasoning...</span>';
+  const planContent = document.createElement('div');
+  planBox.appendChild(planHdr);
+  planBox.appendChild(planContent);
+  
   const span = document.createElement('span');
+  d.appendChild(planBox);
   d.appendChild(span);
+  
   $('msgs').appendChild(d);
   $('msgs').scrollTop = 99999;
+  
+  const render = (text) => {
+    let out = text;
+    const pm = text.match(/<plan>([\s\S]*?)(?:<\/plan>|$)/);
+    if(pm){
+      planBox.style.display = 'block';
+      planContent.textContent = pm[1].trim();
+      out = text.replace(/<plan>([\s\S]*?)(?:<\/plan>|$)/, '').trim();
+      if(text.includes('</plan>')){
+        planBox.classList.remove('scanning');
+        planHdr.innerHTML = '<span style="color:var(--green)">✓</span><span>Plan Completed</span>';
+      }
+    }
+    span.textContent = out;
+  };
+
   return {
     dom: d,
     append(text){
-      span.textContent = text;
+      render(text);
       $('msgs').scrollTop = 99999;
     },
     finish(finalText){
-      span.textContent = finalText;
+      render(finalText);
       attachAiActions(d, finalText);
       $('msgs').scrollTop = 99999;
     }
@@ -1157,16 +1211,29 @@ async function send(){
   // 【核心省Token】历史轮次中已看过的旧图片不重复携带巨大 Base64，仅保留当前轮最新图片
   const cleanMessages = recentHist.map((m, idx) => {
     const isLatest = idx === recentHist.length - 1;
-    if (Array.isArray(m.content)) {
-      if (isLatest) return m;
-      const textOnly = m.content
+    let contentToSend = m.content;
+    
+    if (isLatest && planMode && m.role === 'user') {
+      const planReq = "\n\n[System Req: Please use maximum attention to execute this task. You must output your step-by-step thinking and plan inside <plan>...</plan> tags FIRST, BEFORE writing any code.]";
+      if (typeof contentToSend === 'string') {
+        contentToSend += planReq;
+      } else if (Array.isArray(contentToSend)) {
+        contentToSend = [...contentToSend];
+        const tIdx = contentToSend.findIndex(c => c.type === 'text');
+        if (tIdx > -1) contentToSend[tIdx] = { ...contentToSend[tIdx], text: contentToSend[tIdx].text + planReq };
+      }
+    }
+
+    if (Array.isArray(contentToSend)) {
+      if (isLatest) return { role: m.role, content: contentToSend };
+      const textOnly = contentToSend
         .filter(c => c.type === 'text')
         .map(c => c.text)
         .join('\n');
-      const imgCount = m.content.filter(c => c.type === 'image_url').length;
+      const imgCount = contentToSend.filter(c => c.type === 'image_url').length;
       return { role: m.role, content: (textOnly || '分析图片') + `\n[上一轮已分析过的 ${imgCount} 张图片]` };
     }
-    return m;
+    return { role: m.role, content: contentToSend };
   });
 
   $('btn').disabled=true;
